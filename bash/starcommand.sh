@@ -490,26 +490,26 @@ _star_preview_palette() {
 
 _rkt_load_settings() {
     local cfg="$HOME/.config/bash/rocket_settings.sh"
-    _rkt_random_star_mode=white
-    _rkt_favorite_star_mode=gold
-    _rkt_terminal_theme=dark
+    _rkt_random_star_mode='white'
+    _rkt_favorite_star_mode='gold'
+    _rkt_terminal_theme='dark'
     _rkt_favorite_weight=20
-    _rkt_channel=main
-    _RKT_AUTO_UPDATE_CHECK=""
-    [[ -f "$cfg" ]] && source "$cfg"
+    _RKT_AUTO_UPDATE_CHECK=''
+    _rkt_net_interface=''
+    [[ -f "$cfg" ]] && . "$cfg"
 }
 
 _rkt_save_settings() {
     local cfg="$HOME/.config/bash/rocket_settings.sh"
     mkdir -p "$(dirname "$cfg")"
-    printf '_rkt_random_star_mode=%s\n'   "$_rkt_random_star_mode"    > "$cfg"
-    printf '_rkt_favorite_star_mode=%s\n' "$_rkt_favorite_star_mode" >> "$cfg"
-    printf '_rkt_terminal_theme=%s\n'     "$_rkt_terminal_theme"     >> "$cfg"
+    : > "$cfg"
+    printf '_rkt_random_star_mode=%q\n'   "$_rkt_random_star_mode"   >> "$cfg"
+    printf '_rkt_favorite_star_mode=%q\n' "$_rkt_favorite_star_mode" >> "$cfg"
+    printf '_rkt_terminal_theme=%q\n'     "$_rkt_terminal_theme"     >> "$cfg"
     printf '_rkt_favorite_weight=%s\n'    "$_rkt_favorite_weight"    >> "$cfg"
-    printf '_rkt_channel=%s\n'            "$_rkt_channel"            >> "$cfg"
-    printf '_RKT_AUTO_UPDATE_CHECK=%s\n'  "$_RKT_AUTO_UPDATE_CHECK"  >> "$cfg"
+    printf '_RKT_AUTO_UPDATE_CHECK=%q\n'  "$_RKT_AUTO_UPDATE_CHECK"  >> "$cfg"
+    printf '_rkt_net_interface=%q\n'      "$_rkt_net_interface"      >> "$cfg"
 }
-
 _rkt_print_option() {
     local active="$1"
     shift
@@ -1002,6 +1002,56 @@ star() {
             rm -f "$_RKT_UPDATE_CACHE"
             ;;
 
+        net)
+            _rkt_load_settings
+            local sub="${2:-}"
+
+            case "$sub" in
+                "")
+                    if [[ -n "$_rkt_net_interface" ]]; then
+                        echo "Network adapter preference: $_rkt_net_interface"
+                    else
+                        echo "Network adapter preference: auto"
+                    fi
+                    echo "Use 'star net list' to see interfaces."
+                    echo "Use 'star net use <name>' to select one."
+                    echo "Use 'star net auto' to clear the preference."
+                    ;;
+                list)
+                    local interfaces
+                    interfaces="$(_rkt_list_net_interfaces)"
+                    if [[ -z "$interfaces" ]]; then
+                        echo "No interfaces found."
+                    else
+                        printf '%s\n' "$interfaces"
+                    fi
+                    ;;
+                use)
+                    local name="${*:3}"
+                    if [[ -z "$name" ]]; then
+                        echo "Usage: star net use <interface>"
+                        return
+                    fi
+                    if ! _rkt_list_net_interfaces | grep -Fxq "$name"; then
+                        echo "Interface not found: $name"
+                        echo "Run 'star net list' to see valid interface names."
+                        return
+                    fi
+                    _rkt_net_interface="$name"
+                    _rkt_save_settings
+                    echo "Network interface set to: $name"
+                    ;;
+                auto)
+                    _rkt_net_interface=''
+                    _rkt_save_settings
+                    echo "Network interface selection reset to automatic."
+                    ;;
+                *)
+                    echo "Usage: star net [list | use <interface> | auto]"
+                    ;;
+            esac
+            ;;
+
         help|-h|--help)
             _rkt_load_settings
             if [[ "$_rkt_channel" == "cantaloupe" ]]; then
@@ -1039,6 +1089,11 @@ echo "star explore [N]              browse N random palettes (default 5)"
             echo
             echo "star color reset              restore defaults"
             echo ""
+            echo "star net                      show current network interface setting"
+            echo "star net list                 list available network interfaces"
+            echo "star net use <name>           use a specific interface"
+            echo "star net auto                 restore automatic interface selection"
+            echo ""
             echo "star update                   update to the latest version"
             if [[ "$_rkt_channel" == "cantaloupe" ]]; then
                 echo "star update stable            switch back to the stable channel"
@@ -1051,7 +1106,7 @@ echo "star explore [N]              browse N random palettes (default 5)"
 
         *)
             echo "Unknown subcommand: $1"
-            echo "Try: star, star list, star show, star add, star explore, star color, star weight, star help"
+            echo "Try: star, star list, star show, star add, star explore, star color, star weight, star net, star help"
             return 1
             ;;
     esac
@@ -1155,21 +1210,117 @@ show_mem_info() {
     rkt_set_color normal
 }
 
-show_net_info() {
-    local cols prefix_len available value
-    cols=$(_rkt_cols)
-    prefix_len=29
-    available=$((cols - prefix_len - 2))
-    value="IP Address: $_rkt_ip, Default Gateway: $_rkt_gw"
-    rkt_set_color yellow
-    echo -en "\tNet: "
-    rkt_set_color 0F0
-    if [[ ${#value} -gt $available ]]; then
-        echo -n "${value:0:$((available - 1))}…"
-    else
-        echo -n "$value"
+_rkt_list_net_interfaces() {
+    if command -v ip >/dev/null 2>&1; then
+        ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | sed 's/@.*//' | grep -v '^lo$'
+        return
     fi
+
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        ifconfig -l 2>/dev/null | tr ' ' '\n' | grep -v '^lo0$'
+        return
+    fi
+
+    ifconfig 2>/dev/null | awk -F: '/^[a-zA-Z0-9]/ {print $1}' | grep -v '^lo$'
+}
+
+_rkt_get_ip_for_interface() {
+    local iface="$1"
+
+    if [[ -z "$iface" ]]; then
+        return 1
+    fi
+
+    if command -v ip >/dev/null 2>&1; then
+        ip -4 addr show dev "$iface" 2>/dev/null | awk '/inet / {sub(/\/.*/, "", $2); print $2; exit}'
+        return
+    fi
+
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        ipconfig getifaddr "$iface" 2>/dev/null
+        return
+    fi
+
+    ifconfig "$iface" 2>/dev/null | awk '
+        /inet / {
+            for (i=1; i<=NF; i++) {
+                if ($i == "inet") { print $(i+1); exit }
+                if ($i ~ /^addr:/) { sub(/^addr:/, "", $i); print $i; exit }
+            }
+        }'
+}
+
+_rkt_get_gw_for_interface() {
+    local iface="$1"
+
+    if [[ -n "$iface" ]] && command -v ip >/dev/null 2>&1; then
+        ip route 2>/dev/null | awk -v iface="$iface" '$1 == "default" && $0 ~ (" dev " iface "([ ]|$)") {print $3; exit}'
+        return
+    fi
+
+    if [[ -n "$iface" && "$(uname -s)" == "Darwin" ]]; then
+        route -n get default 2>/dev/null | awk '/gateway:/{print $2; exit}'
+        return
+    fi
+
+    if command -v ip >/dev/null 2>&1; then
+        ip route 2>/dev/null | awk '/^default/ {print $3; exit}'
+        return
+    fi
+
+    route -n 2>/dev/null | awk '$1 == "0.0.0.0" || $1 == "default" {print $2; exit}'
+}
+
+show_net_info() {
+    local ip=""
+    local gw=""
+    local iface="${_rkt_net_interface:-}"
+
+    if [[ -n "$iface" ]]; then
+        ip="$(_rkt_get_ip_for_interface "$iface")"
+        gw="$(_rkt_get_gw_for_interface "$iface")"
+    fi
+
+    if [[ -z "$ip" ]]; then
+        ip=$(ifconfig 2>/dev/null | awk '
+            /inet / && $2 != "127.0.0.1" && $2 != "127.0.1.1" {
+                if ($2 != "inet") { print $2; exit }
+                for (i=1; i<=NF; i++) if ($i == "inet") { print $(i+1); exit }
+            }
+            /inet addr:/ {
+                sub("addr:", "", $2)
+                if ($2 != "127.0.0.1") { print $2; exit }
+            }')
+    fi
+
+    if [[ -z "$gw" ]]; then
+        gw=$(ip route 2>/dev/null | awk '/^default/ {print $3; exit}')
+    fi
+
+    [[ -z "$ip" ]] && ip="N/A"
+    [[ -z "$gw" ]] && gw="N/A"
+
+    rkt_set_color yellow
+    echo -n "IP "
+    rkt_set_color 0F0
+    echo -n "$ip"
     rkt_set_color normal
+    echo -n "  "
+
+    rkt_set_color yellow
+    echo -n "GW "
+    rkt_set_color 0F0
+    echo -n "$gw"
+    rkt_set_color normal
+
+    if [[ -n "$iface" ]]; then
+        echo -n "  "
+        rkt_set_color yellow
+        echo -n "IF "
+        rkt_set_color 0F0
+        echo -n "$iface"
+        rkt_set_color normal
+    fi
 }
 
 # ── Main greeting ──────────────────────────────────────────────────────────────

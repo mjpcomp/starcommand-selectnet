@@ -107,27 +107,26 @@ end
 
 function _rkt_load_settings --description "Load star color settings; defaults if file missing"
     set --local cfg ~/.config/fish/rocket_settings.fish
-    set --global _rkt_random_star_mode white
-    set --global _rkt_favorite_star_mode gold
-    set --global _rkt_terminal_theme dark
+    set --global _rkt_random_star_mode 'white'
+    set --global _rkt_favorite_star_mode 'gold'
+    set --global _rkt_terminal_theme 'dark'
     set --global _rkt_favorite_weight 20
-    set --global _rkt_channel main
-    set --global _RKT_AUTO_UPDATE_CHECK ""
-    if test -f $cfg
-        source $cfg
-    end
+    set --global _RKT_AUTO_UPDATE_CHECK ''
+    set --global _rkt_net_interface ''
+    test -f $cfg && source $cfg
 end
-
 
 function _rkt_save_settings --description "Persist star color settings"
     set --local cfg ~/.config/fish/rocket_settings.fish
-    mkdir -p (dirname $cfg)
-    printf 'set -g _rkt_random_star_mode %s\n'   (string escape -- "$_rkt_random_star_mode")    > $cfg
+    set --local cfg_dir (dirname $cfg)
+    mkdir -p $cfg_dir 2>/dev/null
+    printf '' >$cfg
+    printf 'set -g _rkt_random_star_mode %s\n'   (string escape -- "$_rkt_random_star_mode")   >> $cfg
     printf 'set -g _rkt_favorite_star_mode %s\n' (string escape -- "$_rkt_favorite_star_mode") >> $cfg
     printf 'set -g _rkt_terminal_theme %s\n'     (string escape -- "$_rkt_terminal_theme")     >> $cfg
     printf 'set -g _rkt_favorite_weight %s\n'    (string escape -- "$_rkt_favorite_weight")    >> $cfg
-    printf 'set -g _rkt_channel %s\n'            (string escape -- "$_rkt_channel")            >> $cfg
     printf 'set -g _RKT_AUTO_UPDATE_CHECK %s\n'  (string escape -- "$_RKT_AUTO_UPDATE_CHECK")  >> $cfg
+    printf 'set -g _rkt_net_interface %s\n'      (string escape -- "$_rkt_net_interface")      >> $cfg
 end
 
 
@@ -825,6 +824,56 @@ function star --description "Save / browse / preview rocket palettes"
             echo "Updated to v$remote_version. Open a new tab to take effect."
             rm -f $_RKT_UPDATE_CACHE
 
+        case net
+            _rkt_load_settings
+            set --local sub ""
+            if test (count $argv) -ge 2
+                set sub $argv[2]
+            end
+
+            switch $sub
+                case ""
+                    if test -n "$_rkt_net_interface"
+                        echo "Network adapter preference: $_rkt_net_interface"
+                    else
+                        echo "Network adapter preference: auto"
+                    end
+                    echo "Use 'star net list' to see interfaces."
+                    echo "Use 'star net use <name>' to select one."
+                    echo "Use 'star net auto' to clear the preference."
+
+                case list
+                    set --local interfaces (_rkt_list_net_interfaces)
+                    if test -z "$interfaces"
+                        echo "No interfaces found."
+                    else
+                        printf '%s\n' $interfaces
+                    end
+
+                case use
+                    if test (count $argv) -lt 3
+                        echo "Usage: star net use <interface>"
+                        return
+                    end
+                    set --local name (string join " " $argv[3..-1])
+                    if not contains $name (_rkt_list_net_interfaces)
+                        echo "Interface not found: $name"
+                        echo "Run 'star net list' to see valid interface names."
+                        return
+                    end
+                    set --global _rkt_net_interface "$name"
+                    _rkt_save_settings
+                    echo "Network interface set to: $name"
+
+                case auto
+                    set --global _rkt_net_interface ''
+                    _rkt_save_settings
+                    echo "Network interface selection reset to automatic."
+
+                case '*'
+                    echo "Usage: star net [list | use <interface> | auto]"
+            end
+
         case help -h --help
             _rkt_load_settings
             if test "$_rkt_channel" = "cantaloupe"
@@ -862,6 +911,11 @@ function star --description "Save / browse / preview rocket palettes"
             echo
             echo "star color reset              restore defaults"
             echo ""
+            echo "star net                      show current network interface setting"
+            echo "star net list                 list available network interfaces"
+            echo "star net use <name>           use a specific interface"
+            echo "star net auto                 restore automatic interface selection"
+            echo ""
             echo "star update                   update to the latest version"
             if test "$_rkt_channel" = "cantaloupe"
                 echo "star update stable            switch back to the stable channel"
@@ -873,7 +927,7 @@ function star --description "Save / browse / preview rocket palettes"
 
         case '*'
             echo "Unknown subcommand: $argv[1]"
-            echo "Try: star, star list, star show, star add, star explore, star color, star weight, star help"
+            echo "Try: star, star list, star show, star add, star explore, star color, star weight, star net, star help"
             return 1
     end
 end
@@ -1168,19 +1222,116 @@ function show_mem_info -d "Prints memory information"
 end
 
 
+function _rkt_list_net_interfaces --description "List available network interfaces"
+    if command -q ip
+        ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | sed 's/@.*//' | grep -v '^lo$'
+        return
+    end
+
+    if test (uname -s) = Darwin
+        ifconfig -l 2>/dev/null | tr ' ' '\n' | grep -v '^lo0$'
+        return
+    end
+
+    ifconfig 2>/dev/null | awk -F: '/^[a-zA-Z0-9]/ {print $1}' | grep -v '^lo$'
+end
+
+function _rkt_get_ip_for_interface --description "Get IP for a specific interface"
+    set --local iface $argv[1]
+
+    if test -z "$iface"
+        return 1
+    end
+
+    if command -q ip
+        ip -4 addr show dev "$iface" 2>/dev/null | awk '/inet / {sub(/\/.*/, "", $2); print $2; exit}'
+        return
+    end
+
+    if test (uname -s) = Darwin
+        ipconfig getifaddr "$iface" 2>/dev/null
+        return
+    end
+
+    ifconfig "$iface" 2>/dev/null | awk '
+        /inet / {
+            for (i=1; i<=NF; i++) {
+                if ($i == "inet") { print $(i+1); exit }
+                if ($i ~ /^addr:/) { sub(/^addr:/, "", $i); print $i; exit }
+            }
+        }'
+end
+
+function _rkt_get_gw_for_interface --description "Get gateway for a specific interface"
+    set --local iface $argv[1]
+
+    if test -n "$iface"; and command -q ip
+        ip route 2>/dev/null | awk -v iface="$iface" '$1 == "default" && $0 ~ (" dev " iface "([ ]|$)") {print $3; exit}'
+        return
+    end
+
+    if test -n "$iface"; and test (uname -s) = Darwin
+        route -n get default 2>/dev/null | awk '/gateway:/{print $2; exit}'
+        return
+    end
+
+    if command -q ip
+        ip route 2>/dev/null | awk '/^default/ {print $3; exit}'
+        return
+    end
+
+    route -n 2>/dev/null | awk '$1 == "0.0.0.0" || $1 == "default" {print $2; exit}'
+end
+
+
 function show_net_info -d "Prints information about network"
-    set -l cols (_rkt_cols)
-    set -l prefix_len 29
-    set -l available (math "$cols - $prefix_len - 2")
-    set -l value "IP Address: $_rkt_ip, Default Gateway: $_rkt_gw"
+    set --local ip ""
+    set --local gw ""
+    set --local iface "$_rkt_net_interface"
+
+    if test -n "$iface"
+        set ip (_rkt_get_ip_for_interface "$iface")
+        set gw (_rkt_get_gw_for_interface "$iface")
+    end
+
+    if test -z "$ip"
+        set ip (ifconfig 2>/dev/null | awk '
+            /inet / && $2 != "127.0.0.1" && $2 != "127.0.1.1" {
+                if ($2 != "inet") { print $2; exit }
+                for (i=1; i<=NF; i++) if ($i == "inet") { print $(i+1); exit }
+            }
+            /inet addr:/ {
+                sub("addr:", "", $2)
+                if ($2 != "127.0.0.1") { print $2; exit }
+            }')
+    end
+
+    if test -z "$gw"
+        set gw (ip route 2>/dev/null | awk '/^default/ {print $3; exit}')
+    end
+
+    test -z "$ip" && set ip "N/A"
+    test -z "$gw" && set gw "N/A"
 
     set_color yellow
-    echo -en "\tNet: "
+    echo -n "IP "
     set_color 0F0
-    if test (string length -- "$value") -gt $available
-        echo -en (string sub -l (math "$available - 1") -- "$value")…
-    else
-        echo -en $value
-    end
+    echo -n "$ip"
     set_color normal
+    echo -n "  "
+
+    set_color yellow
+    echo -n "GW "
+    set_color 0F0
+    echo -n "$gw"
+    set_color normal
+
+    if test -n "$iface"
+        echo -n "  "
+        set_color yellow
+        echo -n "IF "
+        set_color 0F0
+        echo -n "$iface"
+        set_color normal
+    end
 end

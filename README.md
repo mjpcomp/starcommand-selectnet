@@ -8,6 +8,47 @@ starcommand launches a different rocket every time you open a shell — a bash, 
 
 -----
 
+## Fork additions
+
+*Modified by MJPComp (https://github.com/mjpcomp)*
+
+This fork adds **network adapter selection** support for shells that display network information in the greeting.
+
+### Network adapter selection
+
+Supported shells:
+- **PowerShell** (verified on Windows)
+- **bash** (verified)
+- **zsh** (implemented, not runtime-tested on Windows)
+- **fish** (implemented, not runtime-tested on Windows)
+
+New command:
+
+```text
+star net
+star net list
+star net use <interface>
+star net auto
+```
+
+Behavior:
+- `star net` shows the current setting (either a specific interface or `auto`)
+- `star net list` lists available network interfaces
+- `star net use <interface>` saves a preferred interface to the settings file
+- `star net auto` clears the preference and returns to automatic detection
+
+When a preferred interface is set, the greeting will query that interface for IP/gateway display first, then fall back to automatic detection if the interface is unavailable or returns no data.
+
+Settings are persisted per shell:
+- PowerShell: `~/.config/powershell/rocket_settings.ps1`
+- bash: `~/.config/bash/rocket_settings.sh`
+- zsh: `~/.config/zsh/rocket_settings.zsh`
+- fish: `~/.config/fish/rocket_settings.fish`
+
+> **Note:** bash changes were runtime-verified during development. PowerShell, zsh, and fish were updated with the same command structure and settings behavior, but zsh/fish specifically may benefit from validation on native Linux/macOS shell environments.
+
+-----
+
 ## How many rockets are possible?
 
 A lot.

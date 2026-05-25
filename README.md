@@ -137,10 +137,12 @@ Verified by `tests/parity_test.sh`, which runs all four shells against a fixed r
 
 Requires bash ≥ 3.2 (macOS default), zsh ≥ 5.0, PowerShell ≥ 5.1, or fish ≥ 3.0.
 
+This fork publishes install assets from `mjpcomp/starcommand-selectnet`.
+
 **bash:**
 
 ```bash
-curl -fsSL https://github.com/mjpcomp/starcommand-selectnet/releases/download/v1.0.8/install.sh | bash
+curl -fsSL https://github.com/mjpcomp/starcommand-selectnet/releases/latest/download/install.sh | bash
 ```
 
 Open a new tab. Done.
@@ -150,7 +152,7 @@ Open a new tab. Done.
 **zsh:**
 
 ```zsh
-curl -fsSL https://github.com/mjpcomp/starcommand-selectnet/releases/download/v1.0.8/zsh_greeting.zsh | zsh
+curl -fsSL https://github.com/mjpcomp/starcommand-selectnet/releases/latest/download/zsh_greeting.zsh | zsh
 ```
 
 Open a new tab. Done.
@@ -160,7 +162,7 @@ Open a new tab. Done.
 ```fish
 mkdir -p ~/.config/fish/functions
 curl -fSL -o ~/.config/fish/functions/fish_greeting.fish \
-  https://github.com/mjpcomp/starcommand-selectnet/releases/download/v1.0.8/fish_greeting.fish
+  https://github.com/mjpcomp/starcommand-selectnet/releases/latest/download/fish_greeting.fish
 ```
 
 Open a new tab. Done.
@@ -168,7 +170,7 @@ Open a new tab. Done.
 **PowerShell:**
 
 ```powershell
-iwr -useb https://github.com/mjpcomp/starcommand-selectnet/releases/download/v1.0.8/install.ps1 | iex
+iwr -useb https://github.com/mjpcomp/starcommand-selectnet/releases/latest/download/install.ps1 | iex
 ```
 
 Open a new tab. Done.

@@ -1,4 +1,5 @@
 # Created By: Peter Azmy
+# Forked By: MJPComp
 set -g _RKT_VERSION (cat (dirname (status filename))/VERSION 2>/dev/null; or echo "0.0.0")
 set -g _RKT_UPDATE_CACHE ~/.config/fish/rocket_update_check
 
@@ -24,7 +25,7 @@ function _rkt_update_check_background --description "Background weekly version c
     _rkt_load_settings
     test "$_rkt_channel" = "cantaloupe"; and set branch "cantaloupe"
     begin
-        set --local v (curl -fsSL --max-time 3 "https://raw.githubusercontent.com/clefspear/starcommand/$branch/VERSION" 2>/dev/null)
+        set --local v (curl -fsSL --max-time 3 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/VERSION" 2>/dev/null)
         printf '%s\n%s\n' "$now" "$v" > $_RKT_UPDATE_CACHE
     end &
 end
@@ -36,7 +37,7 @@ function _rkt_update_check_nudge --description "Print update nudge if newer vers
     test -n "$cached_version"; or return
     test "$cached_version" != "$_RKT_VERSION"; or return
     set_color grey
-    echo "(starcommand v$cached_version available — run 'star update' — https://github.com/clefspear/starcommand/blob/main/CHANGELOG.md)"
+    echo "(starcommand v$cached_version available — run 'star update' — https://github.com/$_rkt_repo_slug/blob/main/CHANGELOG.md)"
     set_color normal
 end
 
@@ -113,6 +114,7 @@ function _rkt_load_settings --description "Load star color settings; defaults if
     set --global _rkt_favorite_weight 20
     set --global _RKT_AUTO_UPDATE_CHECK ''
     set --global _rkt_net_interface ''
+    set --global _rkt_repo_slug 'mjpcomp/starcommand-selectnet'
     test -f $cfg && source $cfg
 end
 
@@ -127,6 +129,7 @@ function _rkt_save_settings --description "Persist star color settings"
     printf 'set -g _rkt_favorite_weight %s\n'    (string escape -- "$_rkt_favorite_weight")    >> $cfg
     printf 'set -g _RKT_AUTO_UPDATE_CHECK %s\n'  (string escape -- "$_RKT_AUTO_UPDATE_CHECK")  >> $cfg
     printf 'set -g _rkt_net_interface %s\n'      (string escape -- "$_rkt_net_interface")      >> $cfg
+    printf 'set -g _rkt_repo_slug %s\n'          (string escape -- "$_rkt_repo_slug")          >> $cfg
 end
 
 
@@ -875,9 +878,9 @@ function star --description "Save / browse / preview rocket palettes"
             _rkt_load_settings
             set --local branch "main"
             test "$_rkt_channel" = "cantaloupe"; and set branch "cantaloupe"
-            set --local remote_version (curl -fsSL --max-time 5 "https://raw.githubusercontent.com/clefspear/starcommand/$branch/VERSION" 2>/dev/null)
+            set --local remote_version (curl -fsSL --max-time 5 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/VERSION" 2>/dev/null)
             if test -z "$remote_version"
-                echo "Failed to check for updates. Visit https://github.com/clefspear/starcommand/releases"
+                echo "Failed to check for updates. Visit https://github.com/$_rkt_repo_slug/releases"
                 return 1
             end
             if test "$remote_version" = "$_RKT_VERSION"
@@ -895,7 +898,7 @@ function star --description "Save / browse / preview rocket palettes"
                 echo "Cannot determine script path. Update manually."
                 return 1
             end
-            set --local dl_url "https://raw.githubusercontent.com/clefspear/starcommand/$branch/fish/fish_greeting.fish"
+            set --local dl_url "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/fish/fish_greeting.fish"
             echo "Downloading: $dl_url"
             set --local temp_file (mktemp 2>/dev/null; or echo /tmp/starcommand_update.$fish_pid)
             set --local http_code (curl -sS -L --max-time 10 -w "%{http_code}" -o "$temp_file" "$dl_url" 2>/dev/null)
@@ -909,7 +912,7 @@ function star --description "Save / browse / preview rocket palettes"
             set --local script_dir (dirname "$script_path")
             cp "$script_path" "$script_path.bak"
             mv "$temp_file" "$script_path"
-            curl -fsSL --max-time 5 "https://raw.githubusercontent.com/clefspear/starcommand/$branch/VERSION" -o "$script_dir/VERSION" 2>/dev/null; or true
+            curl -fsSL --max-time 5 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/VERSION" -o "$script_dir/VERSION" 2>/dev/null; or true
             echo "Updated to v$remote_version. Open a new tab to take effect."
             rm -f $_RKT_UPDATE_CACHE
 

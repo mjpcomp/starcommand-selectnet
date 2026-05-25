@@ -1,4 +1,5 @@
 # Created By: Peter Azmy
+# Forked By: MJPComp
 # zsh_greeting.zsh — Rocketfish zsh port
 # Deterministic rocket + starfield greeting for zsh
 # Ported from fish_greeting.fish
@@ -29,7 +30,7 @@ _rkt_update_check_background() {
   local branch="main"
   _rkt_load_settings
   [[ "$_rkt_channel" == "cantaloupe" ]] && branch="cantaloupe"
-  ( curl -fsSL --max-time 3 "https://raw.githubusercontent.com/clefspear/starcommand/${branch}/VERSION" 2>/dev/null \
+  ( curl -fsSL --max-time 3 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" 2>/dev/null \
       | { IFS= read -r v; printf '%s\n%s\n' "$now" "${v:-}"; } \
       > "$_RKT_UPDATE_CACHE" ) 2>/dev/null &
   disown
@@ -43,13 +44,13 @@ _rkt_update_check_nudge() {
   [[ -n $cached_version ]] || return
   [[ "$cached_version" != "$_RKT_VERSION" ]] || return
   _rkt_set_color grey
-  echo "(starcommand v$cached_version available — run 'star update' — https://github.com/clefspear/starcommand/blob/main/CHANGELOG.md)"
+  echo "(starcommand v$cached_version available — run 'star update' — https://github.com/${_rkt_repo_slug}/blob/main/CHANGELOG.md)"
   _rkt_set_color normal
 }
 
 #
 # Install:
-#   curl -fsSL https://raw.githubusercontent.com/clefspear/starcommand/main/zsh/zsh_greeting.zsh | zsh
+#   curl -fsSL https://raw.githubusercontent.com/${_rkt_repo_slug}/main/zsh/zsh_greeting.zsh | zsh
 #
 # Or source manually from .zshrc:
 #   source ~/.config/zsh/zsh_greeting.zsh
@@ -153,6 +154,7 @@ _rkt_load_settings() {
   typeset -g _rkt_favorite_weight=20
   typeset -g _RKT_AUTO_UPDATE_CHECK=''
   typeset -g _rkt_net_interface=''
+  typeset -g _rkt_repo_slug='mjpcomp/starcommand-selectnet'
   [[ -f "$cfg" ]] && . "$cfg"
 }
 
@@ -166,6 +168,7 @@ _rkt_save_settings() {
   printf 'typeset -g _rkt_favorite_weight=%s\n'    "${(q)_rkt_favorite_weight}"    >> "$cfg"
   printf 'typeset -g _RKT_AUTO_UPDATE_CHECK=%s\n'  "${(q)_RKT_AUTO_UPDATE_CHECK}"  >> "$cfg"
   printf 'typeset -g _rkt_net_interface=%s\n'      "${(q)_rkt_net_interface}"      >> "$cfg"
+  printf 'typeset -g _rkt_repo_slug=%s\n'          "${(q)_rkt_repo_slug}"          >> "$cfg"
 }
 
 _rkt_print_option() {
@@ -880,9 +883,9 @@ star() {
       _rkt_load_settings
       local branch="main"
       [[ "$_rkt_channel" == "cantaloupe" ]] && branch="cantaloupe"
-      local remote_version=$(curl -fsSL --max-time 5 "https://raw.githubusercontent.com/clefspear/starcommand/${branch}/VERSION" 2>/dev/null)
+      local remote_version=$(curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" 2>/dev/null)
       if [[ -z $remote_version ]]; then
-        echo "Failed to check for updates. Visit https://github.com/clefspear/starcommand/releases"
+        echo "Failed to check for updates. Visit https://github.com/${_rkt_repo_slug}/releases"
         return 1
       fi
       if [[ "$remote_version" == "$_RKT_VERSION" ]]; then
@@ -902,7 +905,7 @@ star() {
       fi
       local temp_file
       temp_file=$(mktemp 2>/dev/null) || temp_file="/tmp/starcommand_update.$$"
-      local dl_url="https://raw.githubusercontent.com/clefspear/starcommand/${branch}/zsh/zsh_greeting.zsh"
+      local dl_url="https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/zsh/zsh_greeting.zsh"
       echo "Downloading: $dl_url"
       local http_code
       http_code=$(curl -sS -L --max-time 10 -w '%{http_code}' -o "$temp_file" "$dl_url" 2>/dev/null)
@@ -916,7 +919,7 @@ star() {
       local script_dir="${script_path:h}"
       cp "$script_path" "${script_path}.bak"
       mv "$temp_file" "$script_path"
-      curl -fsSL --max-time 5 "https://raw.githubusercontent.com/clefspear/starcommand/${branch}/VERSION" -o "$script_dir/VERSION" 2>/dev/null || true
+      curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" -o "$script_dir/VERSION" 2>/dev/null || true
       echo "Updated to v$remote_version. Open a new tab to take effect."
       rm -f "$_RKT_UPDATE_CACHE"
       ;;
@@ -1439,7 +1442,7 @@ _starcommand_install() {
   emulate -L zsh
   setopt local_options no_unset pipe_fail
 
-  local repo='clefspear/starcommand'
+  local repo="${_rkt_repo_slug:-mjpcomp/starcommand-selectnet}"
   local branch='main'
   local raw_url="https://raw.githubusercontent.com/${repo}/${branch}/zsh/zsh_greeting.zsh"
 

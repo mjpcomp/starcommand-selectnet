@@ -1,10 +1,12 @@
 ﻿# Created By: Peter Azmy
+# Forked By: MJPComp
 # starcommand.ps1 — Portable rocket greeting for PowerShell
 # Implements xorshift32 PRNG for cross-shell deterministic output
 # Works in PowerShell 5.1+ and PowerShell 7+
 
 $script:RktVersion = if (Test-Path "$PSScriptRoot/VERSION") { (Get-Content "$PSScriptRoot/VERSION" -Raw).Trim() } else { '0.0.0' }
 $script:RktUpdateCache = Join-Path $HOME '.config/powershell/rocket_update_check'
+$script:RktRepoSlug = 'mjpcomp/starcommand-selectnet'
 
 function Invoke-UpdateCheckBackground {
     if ($env:STARCOMMAND_NO_UPDATE_CHECK) { return }
@@ -31,7 +33,7 @@ function Invoke-UpdateCheckBackground {
     Invoke-LoadSettings
     $branch = 'main'
     if ($global:_rkt_channel -eq 'cantaloupe') { $branch = 'cantaloupe' }
-    $url = "https://raw.githubusercontent.com/clefspear/starcommand/$branch/VERSION"
+    $url = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/VERSION"
     $null = Start-Job -ScriptBlock {
         param($url, $cacheFile, $now)
         try {
@@ -56,7 +58,7 @@ function Invoke-UpdateCheckNudge {
     if ($cachedVersion -eq $script:RktVersion) { return }
 
     Set-RocketColor grey
-    [Console]::WriteLine("(starcommand v$cachedVersion available — run 'star update' — https://github.com/clefspear/starcommand/blob/main/CHANGELOG.md)")
+    [Console]::WriteLine("(starcommand v$cachedVersion available — run 'star update' — https://github.com/$($script:RktRepoSlug)/blob/main/CHANGELOG.md)")
     Set-RocketColor normal
 }
 
@@ -1089,14 +1091,14 @@ function star {
             $branch = 'main'
             if ($global:_rkt_channel -eq 'cantaloupe') { $branch = 'cantaloupe' }
             $remoteVersion = ''
-            $versionUrl = "https://raw.githubusercontent.com/clefspear/starcommand/$branch/VERSION"
+            $versionUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/VERSION"
             if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
                 $remoteVersion = & curl.exe -fsSL --ssl-no-revoke --max-time 5 $versionUrl 2>$null
             } else {
                 try { $remoteVersion = (Invoke-WebRequest -Uri $versionUrl -TimeoutSec 5 -UseBasicParsing).Content.Trim() } catch {}
             }
             if (-not $remoteVersion) {
-                [Console]::WriteLine('Failed to check for updates. Visit https://github.com/clefspear/starcommand/releases')
+                [Console]::WriteLine('Failed to check for updates. Visit https://github.com/$($script:RktRepoSlug)/releases')
                 return
             }
             if ($remoteVersion -eq $script:RktVersion) {
@@ -1115,7 +1117,7 @@ function star {
                 return
             }
             $tempFile = [System.IO.Path]::GetTempFileName()
-            $dlUrl = "https://raw.githubusercontent.com/clefspear/starcommand/$branch/powershell/starcommand.ps1"
+            $dlUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/powershell/starcommand.ps1"
             [Console]::WriteLine("Downloading: $dlUrl")
             $httpCode = ""
             try {
@@ -1137,7 +1139,7 @@ function star {
                 $scriptDir = Split-Path $scriptPath -Parent
                 Copy-Item $scriptPath "$scriptPath.bak" -Force
                 Move-Item $tempFile $scriptPath -Force
-                $versionUrl = "https://raw.githubusercontent.com/clefspear/starcommand/$branch/VERSION"
+                $versionUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/VERSION"
                 try {
                     if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
                         & curl.exe -fsSL --ssl-no-revoke --max-time 5 $versionUrl -o "$scriptDir/VERSION" 2>$null

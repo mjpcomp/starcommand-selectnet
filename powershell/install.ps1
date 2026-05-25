@@ -1,11 +1,12 @@
 #!/usr/bin/env pwsh
 # Created By: Peter Azmy
+# Forked By: MJPComp
 # Install starcommand.ps1 into PowerShell profile via remote download.
 # Works on Windows PowerShell 5.1 and PowerShell 7+ (Windows / macOS / Linux).
 
 $ErrorActionPreference = 'Stop'
 
-$repo    = 'clefspear/starcommand'
+$repo    = 'mjpcomp/starcommand-selectnet'
 $branch  = 'main'
 $rawBase = "https://raw.githubusercontent.com/$repo/$branch/powershell"
 

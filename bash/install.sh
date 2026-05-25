@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Created By: Peter Azmy
+# Forked By: MJPComp
 # Install starcommand bash greeting via remote download.
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/clefspear/starcommand/main/bash/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/mjpcomp/starcommand-selectnet/main/bash/install.sh | bash
 #   bash install.sh [-p <profile_path>] [-n]
 #
 # Flags:
@@ -11,7 +12,7 @@
 
 set -eu
 
-REPO="clefspear/starcommand"
+REPO="mjpcomp/starcommand-selectnet"
 BRANCH="main"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}/bash"
 GREETING_FILE="starcommand.sh"

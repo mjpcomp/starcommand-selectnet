@@ -7,6 +7,21 @@
 _RKT_VERSION="$(cat "$(dirname "${BASH_SOURCE[0]}")/VERSION" 2>/dev/null || echo "0.0.0")"
 _RKT_UPDATE_CACHE="$HOME/.config/bash/rocket_update_check"
 
+_rkt_is_newer_version() {
+    local remote="$1" local_v="$2"
+    local r_major="${remote%%.*}" rest="${remote#*.}"
+    local r_minor="${rest%%.*}" r_patch="${rest#*.}"
+    local l_major="${local_v%%.*}"
+    rest="${local_v#*.}"
+    local l_minor="${rest%%.*}" l_patch="${rest#*.}"
+    (( r_major > l_major )) && return 0
+    (( r_major < l_major )) && return 1
+    (( r_minor > l_minor )) && return 0
+    (( r_minor < l_minor )) && return 1
+    (( r_patch > l_patch )) && return 0
+    return 1
+}
+
 _rkt_update_check_background() {
     [[ -n ${STARCOMMAND_NO_UPDATE_CHECK:-} ]] && return
     [[ "${_RKT_AUTO_UPDATE_CHECK:-}" == "yes" ]] || return
@@ -335,7 +350,9 @@ rkt_render_flame() {
 
 # ── Palette generation ─────────────────────────────────────────────────────────
 
-rkt_gen_rocket_palette() {
+# DEPRECATED — HSL-based generator, kept as reference for color-theme previews.
+# Use rkt_gen_rocket_palette (the 24-bit version above) for random rolls.
+_rkt_gen_rocket_palette_hsl() {
     local h_base scheme sat light offs h
     rkt_prng_range 0 359; h_base=$_RKT_PRNG_RET
     rkt_prng_range 0 4;   scheme=$_RKT_PRNG_RET
@@ -375,6 +392,27 @@ rkt_gen_rocket_palette() {
         bi = int((b + m) * 255 + 0.5)
         printf "%02x%02x%02x\n", ri, gi, bi
     }'
+}
+
+rkt_gen_rocket_palette() { _rkt_gen_rocket_palette_24bit "$@"; }
+
+_rkt_gen_rocket_palette_24bit() {
+    local theme="${_RKT_TERMINAL_THEME:-${_rkt_terminal_theme:-dark}}"
+    local r g b brightness i
+    for i in 1 2 3 4 5 6; do
+        while :; do
+            rkt_prng_range 0 255; r=$_RKT_PRNG_RET
+            rkt_prng_range 0 255; g=$_RKT_PRNG_RET
+            rkt_prng_range 0 255; b=$_RKT_PRNG_RET
+            brightness=$(( (299 * r + 587 * g + 114 * b) / 1000 ))
+            if [[ "$theme" == light ]]; then
+                (( brightness <= 200 )) && break
+            else
+                (( brightness >= 60 )) && break
+            fi
+        done
+        printf "%02x%02x%02x\n" "$r" "$g" "$b"
+    done
 }
 
 _rocket_record_history() {
@@ -830,6 +868,7 @@ star() {
             fi
             local _rkt_ansi=97
             [[ "$_rkt_terminal_theme" == light ]] && _rkt_ansi=30
+            local -A _rkt_seen=()
             echo ""
             local i
             for ((i=1; i<=n; i++)); do
@@ -838,7 +877,14 @@ star() {
                     rkt_prng_range 0 1
                     _rkt_flame_idx=$_RKT_PRNG_RET
                 fi
-                local -a p=($(rkt_gen_rocket_palette))
+                local -a p=()
+                local _rkt_pal_str=""
+                while :; do
+                    p=($(rkt_gen_rocket_palette))
+                    _rkt_pal_str="${p[*]}"
+                    [[ -z "${_rkt_seen[$_rkt_pal_str]:-}" ]] && break
+                done
+                _rkt_seen[$_rkt_pal_str]=1
                 printf "%4d. " "$i"
                 if $has_rockets && $_rkt_alive; then
                     local _rkt_row
@@ -1042,8 +1088,12 @@ star() {
                 echo "Failed to check for updates. Visit https://github.com/${_rkt_repo_slug}/releases"
                 return 1
             fi
-            if [[ "$remote_version" == "$_RKT_VERSION" ]]; then
-                echo "starcommand is already up to date (v$_RKT_VERSION)."
+            if ! _rkt_is_newer_version "$remote_version" "$_RKT_VERSION"; then
+                if [[ "$remote_version" == "$_RKT_VERSION" ]]; then
+                    echo "starcommand is already up to date (v$_RKT_VERSION)."
+                else
+                    echo "Remote version ($remote_version) is older than installed ($_RKT_VERSION)."
+                fi
                 return 0
             fi
             echo "starcommand v$remote_version is available. Update now? [y/n]"
@@ -1071,6 +1121,16 @@ star() {
                 return 1
             fi
             local script_dir="$(dirname "$script_path")"
+            local version_url="https://raw.githubusercontent.com/clefspear/starcommand/${branch}/docs/VERSION"
+            local temp_version
+            temp_version=$(mktemp 2>/dev/null) || temp_version="/tmp/starcommand_version.$$"
+            local version_http
+            version_http=$(curl -sS -L --max-time 10 -w '%{http_code}' -o "$temp_version" "$version_url" 2>/dev/null)
+            if [[ "$version_http" != "200" ]]; then
+                echo "Failed to download VERSION file. Update aborted."
+                rm -f "$temp_file" "$temp_version"
+                return 1
+            fi
             cp "$script_path" "${script_path}.bak"
             mv "$temp_file" "$script_path"
             curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" -o "$script_dir/VERSION" 2>/dev/null || true

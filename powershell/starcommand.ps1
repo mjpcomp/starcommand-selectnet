@@ -4,7 +4,7 @@
 # Implements xorshift32 PRNG for cross-shell deterministic output
 # Works in PowerShell 5.1+ and PowerShell 7+
 
-$script:RktVersion = if (Test-Path "$PSScriptRoot/VERSION") { (Get-Content "$PSScriptRoot/VERSION" -Raw).Trim() } else { '0.0.0' }
+$script:RktVersion = if (Test-Path (Join-Path $PSScriptRoot 'VERSION')) { (Get-Content (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim() } else { '0.0.0' }
 $script:RktUpdateCache = Join-Path $HOME '.config/powershell/rocket_update_check'
 $script:RktRepoSlug = 'mjpcomp/starcommand-selectnet'
 
@@ -348,7 +348,8 @@ function Invoke-RenderFlame {
 
 # ── Palette generation ─────────────────────────────────────────────────────────
 
-function Invoke-GenRocketPalette {
+# DEPRECATED — HSL-based generator, kept as reference for color-theme previews.
+function Invoke-GenRocketPaletteHsl {
     $h_base = Get-PrngRange 0 359
     $scheme = Get-PrngRange 0 4
     $sat = Get-PrngRange 65 90
@@ -365,6 +366,25 @@ function Invoke-GenRocketPalette {
     foreach ($off in $offs) {
         $h = ($h_base + $off) % 360
         $colors += Convert-HslToHex $h $sat $light
+    }
+    return $colors
+}
+
+function Invoke-GenRocketPalette {
+    return Invoke-GenRocketPalette24Bit
+}
+
+function Invoke-GenRocketPalette24Bit {
+    $theme = if ($global:_rkt_terminal_theme) { $global:_rkt_terminal_theme } else { 'dark' }
+    $colors = @()
+    for ($i = 0; $i -lt 6; $i++) {
+        do {
+            $r = Get-PrngRange 0 255
+            $g = Get-PrngRange 0 255
+            $b = Get-PrngRange 0 255
+            $brightness = [int]((299 * $r + 587 * $g + 114 * $b) / 1000)
+        } while (($theme -eq 'light' -and $brightness -gt 200) -or ($theme -ne 'light' -and $brightness -lt 60))
+        $colors += '{0:x2}{1:x2}{2:x2}' -f $r, $g, $b
     }
     return $colors
 }
@@ -524,7 +544,7 @@ function Invoke-HwInfo {
     $cache = Join-Path $cacheDir 'rocket_hw_cache.ps1'
     New-Item -ItemType Directory -Path $cacheDir -Force -ErrorAction SilentlyContinue | Out-Null
 
-    if ((Test-Path $cache) -and ((Get-Item $cache).LastWriteTime -gt (Get-Date).AddDays(-1))) {
+    if ((Test-Path $cache) -and ((Get-Item $cache).LastWriteTime -gt (Get-Date).AddDays(-7))) {
         . $cache
         return
     }
@@ -534,6 +554,7 @@ function Invoke-HwInfo {
 
     $cpu_str = ''
     $mem_str = ''
+    $bootTicks = 0
 
     if ($os_type -eq [System.PlatformID]::Win32NT) {
         try {
@@ -543,7 +564,10 @@ function Invoke-HwInfo {
                 $mem_gb = [Math]::Round($cs.TotalPhysicalMemory / 1GB, 1)
                 $mem_str = "$mem_gb GB"
             }
+            $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+            if ($os) { $bootTicks = $os.LastBootUpTime.Ticks }
         } catch {}
+        if (-not $cpu_str) { $cpu_str = "$([System.Environment]::ProcessorCount) logical processors" }
     } else {
         try {
             $os_str = uname -sm
@@ -580,6 +604,7 @@ function Invoke-HwInfo {
 `$global:_rkt_os='$os_str'
 `$global:_rkt_cpu='$cpu_str'
 `$global:_rkt_mem='$mem_str'
+`$global:_rkt_boot_tick=$bootTicks
 "@ | Set-Content $cache
     . $cache
 }
@@ -589,7 +614,7 @@ function Invoke-NetInfo {
     $cache = Join-Path $cacheDir 'rocket_net_cache.ps1'
     New-Item -ItemType Directory -Path $cacheDir -Force -ErrorAction SilentlyContinue | Out-Null
 
-    if ((Test-Path $cache) -and ((Get-Item $cache).LastWriteTime -gt (Get-Date).AddMinutes(-5))) {
+    if ((Test-Path $cache) -and ((Get-Item $cache).LastWriteTime -gt (Get-Date).AddDays(-7))) {
         . $cache
         return
     }
@@ -895,13 +920,21 @@ function star {
             }
             $rktAnsi = 97
             if ($global:_rkt_terminal_theme -eq 'light') { $rktAnsi = 30 }
+            if (-not $global:Esc) { $global:Esc = [char]27 }
+
+            $rktSeen = [System.Collections.Generic.HashSet[string]]::new()
 
             [Console]::WriteLine()
             for ($i = 1; $i -le $n; $i++) {
+                Set-PrngSeed
                 if ($hasRockets -and $rktAlive -and $rktSubframe -eq 0) {
                     $rktFlameIdx = Get-PrngRange 0 1
                 }
-                $p = Invoke-GenRocketPalette
+                $p = @()
+                do {
+                    $p = Invoke-GenRocketPalette
+                    $rktPalStr = "$($p[0]) $($p[1]) $($p[2]) $($p[3]) $($p[4]) $($p[5])"
+                } while (-not $rktSeen.Add($rktPalStr))
                 [Console]::Write("{0,4}. " -f $i)
                 if ($hasRockets -and $rktAlive) {
                     $rktRow = ''
@@ -912,9 +945,11 @@ function star {
                     } else {
                         if ($rktFlameIdx -eq 0) { $rktRow = ' v ' } else { $rktRow = ' * ' }
                     }
+                    if (-not $rktRow) { $rktRow = '' }
+                    if (-not $rktAnsi) { $rktAnsi = 97 }
                     for ($s = 0; $s -lt 6; $s++) {
                         if ($s -eq $rktCol) {
-                            [Console]::Write("{0}[0m{0}[{1}m{2}{0}[0m" -f $global:Esc, $rktAnsi, $rktRow)
+                            [Console]::Write("$global:Esc[0m$global:Esc[$($rktAnsi)m$rktRow$global:Esc[0m")
                         } else {
                             Set-RocketColor $p[$s]; [Console]::Write('★')
                             if ($s -lt 5) {
@@ -933,7 +968,7 @@ function star {
                 }
                 Set-RocketColor normal
                 [Console]::WriteLine("  $($p[0]) $($p[1]) $($p[2]) $($p[3]) $($p[4]) $($p[5])")
-                $true
+                $null = $true
                 if ($hasRockets) {
                     if ($rktAlive) {
                         $rktSubframe++
@@ -1101,8 +1136,19 @@ function star {
                 [Console]::WriteLine('Failed to check for updates. Visit https://github.com/$($script:RktRepoSlug)/releases')
                 return
             }
-            if ($remoteVersion -eq $script:RktVersion) {
-                [Console]::WriteLine("starcommand is already up to date (v$script:RktVersion).")
+            try {
+                $remoteVer = [System.Version]::Parse($remoteVersion)
+                $localVer = [System.Version]::Parse($script:RktVersion)
+                $isNewer = $remoteVer -gt $localVer
+            } catch {
+                $isNewer = $remoteVersion -ne $script:RktVersion
+            }
+            if (-not $isNewer) {
+                if ($remoteVersion -eq $script:RktVersion) {
+                    [Console]::WriteLine("starcommand is already up to date (v$script:RktVersion).")
+                } else {
+                    [Console]::WriteLine("Remote version ($remoteVersion) is older than installed ($script:RktVersion).")
+                }
                 return
             }
             [Console]::WriteLine("starcommand v$remoteVersion is available. Update now? [y/n]")
@@ -1142,11 +1188,22 @@ function star {
                 $versionUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/VERSION"
                 try {
                     if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
-                        & curl.exe -fsSL --ssl-no-revoke --max-time 5 $versionUrl -o "$scriptDir/VERSION" 2>$null
+                        $vh = & curl.exe -sS -L --ssl-no-revoke --max-time 10 -w '%{http_code}' -o $tempVersion $versionUrl 2>$null
+                        if ($vh -eq '200') { $versionOk = $true }
                     } else {
-                        (Invoke-WebRequest -Uri $versionUrl -TimeoutSec 5 -UseBasicParsing).Content.Trim() | Out-File "$scriptDir/VERSION" -Encoding ascii -Force
+                        $vr = Invoke-WebRequest -Uri $versionUrl -TimeoutSec 10 -UseBasicParsing -OutFile $tempVersion
+                        if ($vr.StatusCode -eq 200) { $versionOk = $true }
                     }
                 } catch {}
+                if (-not $versionOk) {
+                    [Console]::WriteLine('Failed to download VERSION file. Update aborted.')
+                    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                    Remove-Item $tempVersion -Force -ErrorAction SilentlyContinue
+                    return
+                }
+                Copy-Item $scriptPath "$scriptPath.bak" -Force
+                Move-Item $tempFile $scriptPath -Force
+                Move-Item $tempVersion (Join-Path $scriptDir 'VERSION') -Force
                 [Console]::WriteLine("Updated to v$remoteVersion. Open a new tab to take effect.")
                 Remove-Item $script:RktUpdateCache -Force -ErrorAction SilentlyContinue
             } catch {
@@ -1343,6 +1400,18 @@ function Write-WelcomeMessage {
 
 function Get-PortableUptime {
     try {
+        # Fast path: cached boot tick from Invoke-HwInfo
+        if ($global:_rkt_boot_tick -and $global:_rkt_boot_tick -gt 0) {
+            $bootTime = [DateTime]::new($global:_rkt_boot_tick)
+            $u = (Get-Date) - $bootTime
+            return ('{0}d {1}h {2}m' -f $u.Days, $u.Hours, $u.Minutes)
+        }
+        # Fast fallback via Environment.TickCount (avoids WMI)
+        $bootTime = [DateTime]::Now.AddMilliseconds(-[Environment]::TickCount)
+        $u = (Get-Date) - $bootTime
+        if ($u.TotalDays -lt 49) {
+            return ('{0}d {1}h {2}m' -f $u.Days, $u.Hours, $u.Minutes)
+        }
         # PowerShell 7+ has Get-Uptime built in (cross-platform)
         if (Get-Command Get-Uptime -ErrorAction SilentlyContinue) {
             $u = Get-Uptime

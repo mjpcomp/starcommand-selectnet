@@ -28,7 +28,7 @@ $starcommandPath = Join-Path $installDir 'starcommand.ps1'
 
 # 3. Download starcommand.ps1 and VERSION
 Invoke-WebRequest -UseBasicParsing -Uri "$rawBase/starcommand.ps1" -OutFile $starcommandPath
-$versionUrl = "https://raw.githubusercontent.com/$repo/$branch/VERSION"
+$versionUrl = "https://raw.githubusercontent.com/$repo/$branch/docs/VERSION"
 Invoke-WebRequest -UseBasicParsing -Uri $versionUrl -OutFile (Join-Path $installDir 'VERSION')
 
 # 4. Ensure execution policy allows scripts. Execution policy is a Windows-only

@@ -3,6 +3,17 @@
 set -g _RKT_VERSION (cat (dirname (status filename))/VERSION 2>/dev/null; or echo "0.0.0")
 set -g _RKT_UPDATE_CACHE ~/.config/fish/rocket_update_check
 
+function _rkt_is_newer_version --argument-names remote local_v
+    set --local r_parts (string split "." $remote)
+    set --local l_parts (string split "." $local_v)
+    if test $r_parts[1] -gt $l_parts[1]; return 0; end
+    if test $r_parts[1] -lt $l_parts[1]; return 1; end
+    if test $r_parts[2] -gt $l_parts[2]; return 0; end
+    if test $r_parts[2] -lt $l_parts[2]; return 1; end
+    if test $r_parts[3] -gt $l_parts[3]; return 0; end
+    return 1
+end
+
 function _rkt_update_check_background --description "Background weekly version check"
     test -n "$STARCOMMAND_NO_UPDATE_CHECK"; and return
     set -q _RKT_AUTO_UPDATE_CHECK; and test "$_RKT_AUTO_UPDATE_CHECK" != "yes"; and return
@@ -155,7 +166,8 @@ function _rkt_print_option --description "Print '(a | b | ...)' with the active 
 end
 
 
-function _gen_rocket_palette --description "6-color palette with distinct hues per role"
+# DEPRECATED — HSL-based generator, kept as reference for color-theme previews.
+function _rkt_gen_rocket_palette_hsl --description "HSL-based palette (deprecated)"
     set --local h_base (_rkt_prng_range 0 359)
     set --local scheme (_rkt_prng_range 0 4)
     set --local sat (_rkt_prng_range 65 90)
@@ -181,6 +193,32 @@ function _gen_rocket_palette --description "6-color palette with distinct hues p
     for off in $offs
         set --local h (math "($h_base + $off) % 360")
         _hsl_to_hex $h $sat $light
+    end
+end
+
+function _gen_rocket_palette --description "6-color palette across full 24-bit space"
+    _rkt_gen_rocket_palette_24bit
+end
+
+function _rkt_gen_rocket_palette_24bit --description "24-bit palette generator with theme visibility"
+    set --local theme dark
+    if set -q _rkt_terminal_theme
+        set theme $_rkt_terminal_theme
+    end
+    set --local r g b
+    for i in (seq 6)
+        while true
+            set r (_rkt_prng_range 0 255)
+            set g (_rkt_prng_range 0 255)
+            set b (_rkt_prng_range 0 255)
+            set --local brightness (math "(299 * $r + 587 * $g + 114 * $b) / 1000")
+            if test "$theme" = light
+                if test $brightness -le 200; break; end
+            else
+                if test $brightness -ge 60; break; end
+            end
+        end
+        printf "%02x%02x%02x\n" $r $g $b
     end
 end
 
@@ -668,13 +706,21 @@ function star --description "Save / browse / preview rocket palettes"
                 set _rkt_ansi 30
             end
 
+            set --local _rkt_seen
             echo ""
             for i in (seq $n)
                 _rkt_prng_seed
                 if $has_rockets; and $_rkt_alive; and test $_rkt_subframe -eq 0
                     set _rkt_flame_idx (_rkt_prng_range 0 1)
                 end
-                set --local p (_gen_rocket_palette)
+                set --local p
+                set --local _rkt_pal_str
+                while true
+                    set p (_gen_rocket_palette)
+                    set _rkt_pal_str (string join " " $p)
+                    if not contains -- "$_rkt_pal_str" $_rkt_seen; break; end
+                end
+                set -a _rkt_seen $_rkt_pal_str
                 printf "%4d. " $i
                 if $has_rockets; and $_rkt_alive
                     set --local _rkt_row
@@ -883,8 +929,12 @@ function star --description "Save / browse / preview rocket palettes"
                 echo "Failed to check for updates. Visit https://github.com/$_rkt_repo_slug/releases"
                 return 1
             end
-            if test "$remote_version" = "$_RKT_VERSION"
-                echo "starcommand is already up to date (v$_RKT_VERSION)."
+            if not _rkt_is_newer_version "$remote_version" "$_RKT_VERSION"
+                if test "$remote_version" = "$_RKT_VERSION"
+                    echo "starcommand is already up to date (v$_RKT_VERSION)."
+                else
+                    echo "Remote version ($remote_version) is older than installed ($_RKT_VERSION)."
+                end
                 return 0
             end
             echo "starcommand v$remote_version is available. Update now? [y/n]"
@@ -910,6 +960,14 @@ function star --description "Save / browse / preview rocket palettes"
                 return 1
             end
             set --local script_dir (dirname "$script_path")
+            set --local version_url "https://raw.githubusercontent.com/clefspear/starcommand/$branch/docs/VERSION"
+            set --local temp_version (mktemp 2>/dev/null; or echo /tmp/starcommand_version.$fish_pid)
+            set --local version_http (curl -sS -L --max-time 10 -w "%{http_code}" -o "$temp_version" "$version_url" 2>/dev/null)
+            if test "$version_http" != "200"
+                echo "Failed to download VERSION file. Update aborted."
+                rm -f "$temp_file" "$temp_version"
+                return 1
+            end
             cp "$script_path" "$script_path.bak"
             mv "$temp_file" "$script_path"
             curl -fsSL --max-time 5 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/VERSION" -o "$script_dir/VERSION" 2>/dev/null; or true
@@ -1009,8 +1067,6 @@ function star --description "Save / browse / preview rocket palettes"
             echo "star net auto                 restore automatic interface selection"
             echo ""
             echo "star update                   update to the latest version"
-            if test "$_rkt_channel" = "cantaloupe"
-                echo "star update stable            switch back to the stable channel"
             end
             echo "star supernova                 remove starcommand from this system"
             echo ""

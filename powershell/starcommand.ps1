@@ -5,8 +5,16 @@
 # Works in PowerShell 5.1+ and PowerShell 7+
 
 $script:RktVersion = if (Test-Path (Join-Path $PSScriptRoot 'VERSION')) { (Get-Content (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim() } else { '0.0.0' }
-$script:RktUpdateCache = Join-Path $HOME '.config/powershell/rocket_update_check'
+$script:RktUpdateCache = Join-Path (Get-RocketConfigDir) 'rocket_update_check'
 $script:RktRepoSlug = 'mjpcomp/starcommand-selectnet'
+$script:RktVersion = if (Test-Path (Join-Path $PSScriptRoot 'VERSION')) { (Get-Content (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim() } else { '0.0.0' }
+$script:RktRepoSlug = 'mjpcomp/starcommand-selectnet'
+
+function Get-RocketConfigDir {
+    # Use profile-relative path for consistency with installer
+    $profileBase = Split-Path -Parent $PROFILE.CurrentUserAllHosts
+    return (Join-Path $profileBase '.starcommand')
+}
 
 function Invoke-UpdateCheckBackground {
     if ($env:STARCOMMAND_NO_UPDATE_CHECK) { return }
@@ -33,7 +41,7 @@ function Invoke-UpdateCheckBackground {
     Invoke-LoadSettings
     $branch = 'main'
     if ($global:_rkt_channel -eq 'cantaloupe') { $branch = 'cantaloupe' }
-    $url = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/VERSION"
+    $url = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/docs/VERSION"
     $null = Start-Job -ScriptBlock {
         param($url, $cacheFile, $now)
         try {
@@ -390,7 +398,7 @@ function Invoke-GenRocketPalette24Bit {
 }
 
 function Invoke-RecordHistory {
-    $dir = Join-Path $HOME '.config/powershell'
+    $dir = Get-RocketConfigDir
     $file = Join-Path $dir 'rocket_history.txt'
     New-Item -ItemType Directory -Path $dir -Force -ErrorAction SilentlyContinue | Out-Null
     Add-Content -Path $file -Value ($args -join ' ')
@@ -403,7 +411,7 @@ function Invoke-RecordHistory {
 }
 
 function Invoke-RocketPickPalette {
-    $favDir = Join-Path $HOME '.config/powershell'
+    $favDir = Get-RocketConfigDir
     $fav_file = Join-Path $favDir 'rocket_favorites.txt'
     $colors = @()
 
@@ -427,7 +435,7 @@ function Invoke-RocketPickPalette {
 # ── History / Favorites helpers ────────────────────────────────────────────────
 
 function Test-PaletteIsFavorite {
-    $favDir = Join-Path $HOME '.config/powershell'
+    $favDir = Get-RocketConfigDir
     $fav_file = Join-Path $favDir 'rocket_favorites.txt'
     if (-not (Test-Path $fav_file)) { return $false }
     $palette = "$global:_rkt_tip $global:_rkt_win $global:_rkt_bdy $global:_rkt_top $global:_rkt_sds $global:_rkt_flm"
@@ -492,7 +500,7 @@ function Invoke-PreviewPalette {
 # ── Settings ───────────────────────────────────────────────────────────────────
 
 function Invoke-LoadSettings {
-    $cfg = Join-Path $HOME '.config/powershell/rocket_settings.ps1'
+    $cfg = Join-Path (Get-RocketConfigDir) 'rocket_settings.ps1'
     $global:_rkt_random_star_mode = 'white'
     $global:_rkt_favorite_star_mode = 'gold'
     $global:_rkt_terminal_theme = 'dark'
@@ -504,7 +512,7 @@ function Invoke-LoadSettings {
 }
 
 function Invoke-SaveSettings {
-    $cfg = Join-Path $HOME '.config/powershell/rocket_settings.ps1'
+    $cfg = Join-Path (Get-RocketConfigDir) 'rocket_settings.ps1'
     $dir = Split-Path $cfg -Parent
     New-Item -ItemType Directory -Path $dir -Force -ErrorAction SilentlyContinue | Out-Null
 @"
@@ -540,7 +548,7 @@ function Invoke-PrintOption {
 # ── System info ────────────────────────────────────────────────────────────────
 
 function Invoke-HwInfo {
-    $cacheDir = Join-Path $HOME '.config/powershell'
+    $cacheDir = Get-RocketConfigDir
     $cache = Join-Path $cacheDir 'rocket_hw_cache.ps1'
     New-Item -ItemType Directory -Path $cacheDir -Force -ErrorAction SilentlyContinue | Out-Null
 
@@ -610,7 +618,7 @@ function Invoke-HwInfo {
 }
 
 function Invoke-NetInfo {
-    $cacheDir = Join-Path $HOME '.config/powershell'
+    $cacheDir = Get-RocketConfigDir
     $cache = Join-Path $cacheDir 'rocket_net_cache.ps1'
     New-Item -ItemType Directory -Path $cacheDir -Force -ErrorAction SilentlyContinue | Out-Null
 
@@ -690,7 +698,7 @@ function Invoke-NetInfo {
 # ── Star command ───────────────────────────────────────────────────────────────
 
 function star {
-    $favDir = Join-Path $HOME '.config/powershell'
+    $favDir = Get-RocketConfigDir
     $fav_file = Join-Path $favDir 'rocket_favorites.txt'
     $hist_file = Join-Path $favDir 'rocket_history.txt'
 
@@ -1126,14 +1134,14 @@ function star {
             $branch = 'main'
             if ($global:_rkt_channel -eq 'cantaloupe') { $branch = 'cantaloupe' }
             $remoteVersion = ''
-            $versionUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/VERSION"
+            $versionUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/docs/VERSION"
             if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
                 $remoteVersion = & curl.exe -fsSL --ssl-no-revoke --max-time 5 $versionUrl 2>$null
             } else {
                 try { $remoteVersion = (Invoke-WebRequest -Uri $versionUrl -TimeoutSec 5 -UseBasicParsing).Content.Trim() } catch {}
             }
             if (-not $remoteVersion) {
-                [Console]::WriteLine('Failed to check for updates. Visit https://github.com/$($script:RktRepoSlug)/releases')
+                [Console]::WriteLine("Failed to check for updates. Visit https://github.com/$($script:RktRepoSlug)/releases")
                 return
             }
             try {
@@ -1165,6 +1173,8 @@ function star {
             $tempFile = [System.IO.Path]::GetTempFileName()
             $dlUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/powershell/starcommand.ps1"
             [Console]::WriteLine("Downloading: $dlUrl")
+			$tempVersion = [System.IO.Path]::GetTempFileName()
+			$versionOk = $false
             $httpCode = ""
             try {
                 if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
@@ -1185,7 +1195,7 @@ function star {
                 $scriptDir = Split-Path $scriptPath -Parent
                 Copy-Item $scriptPath "$scriptPath.bak" -Force
                 Move-Item $tempFile $scriptPath -Force
-                $versionUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/VERSION"
+                $versionUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/docs/VERSION"
                 try {
                     if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
                         $vh = & curl.exe -sS -L --ssl-no-revoke --max-time 10 -w '%{http_code}' -o $tempVersion $versionUrl 2>$null
@@ -1332,9 +1342,10 @@ function star {
             }
             [Console]::WriteLine('star supernova                 remove starcommand from this system')
             [Console]::WriteLine()
-            [Console]::WriteLine("  Favorites: $fav_file")
-            [Console]::WriteLine("  History:   $hist_file (last 100 launches)")
-            [Console]::WriteLine("  Settings:  $(Join-Path $HOME '.config/powershell/rocket_settings.ps1')")
+			$configDir = Get-RocketConfigDir
+			[Console]::WriteLine("  Favorites: $(Join-Path $configDir 'rocket_favorites.txt')")
+			[Console]::WriteLine("  History:   $(Join-Path $configDir 'rocket_history.txt') (last 100 launches)")
+			[Console]::WriteLine("  Settings:  $(Join-Path $configDir 'rocket_settings.ps1')")
         }
 
         'supernova' {
@@ -1359,17 +1370,20 @@ function star {
             if ($scriptPath -and (Test-Path $scriptPath)) { Remove-Item $scriptPath -Force }
             Remove-Item $script:RktUpdateCache -Force -ErrorAction SilentlyContinue
 
-            $profileDir = Split-Path $PROFILE.CurrentUserAllHosts -Parent
-            if ($keep) {
-                [Console]::WriteLine("starcommand uninstalled. Favorites, history, and settings kept at $profileDir")
-            } else {
-                Remove-Item -Force -ErrorAction SilentlyContinue -Path @(
-                    (Join-Path $profileDir 'rocket_favorites.txt'),
-                    (Join-Path $profileDir 'rocket_history.txt'),
-                    (Join-Path $profileDir 'rocket_settings.ps1')
-                )
-                [Console]::WriteLine('starcommand has been uninstalled.')
-            }
+			$configDir = Get-RocketConfigDir
+			if ($keep) {
+				[Console]::WriteLine("starcommand uninstalled. Favorites, history, and settings kept at $configDir")
+			} else {
+				Remove-Item -Force -ErrorAction SilentlyContinue -Path @(
+					(Join-Path $configDir 'rocket_favorites.txt'),
+					(Join-Path $configDir 'rocket_history.txt'),
+					(Join-Path $configDir 'rocket_settings.ps1'),
+					(Join-Path $configDir 'rocket_update_check'),
+					(Join-Path $configDir 'rocket_hw_cache.ps1'),
+					(Join-Path $configDir 'rocket_net_cache.ps1')
+				)
+				[Console]::WriteLine('starcommand has been uninstalled.')
+			}
         }
 
         default {

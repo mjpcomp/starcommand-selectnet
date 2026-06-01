@@ -54,7 +54,6 @@ $endMarker   = '# <<< starcommand <<<'
 $profileBlock = @"
 $beginMarker
 . "$starcommandPath"
-Invoke-Starcommand
 $endMarker
 "@
 
@@ -64,12 +63,13 @@ if (-not $existing) { $existing = '' }
 # Strip any prior starcommand block (fenced or legacy bare dot-source)
 $fencedPattern = "(?s)\r?\n?$([regex]::Escape($beginMarker)).*?$([regex]::Escape($endMarker))\r?\n?"
 $cleaned = [regex]::Replace($existing, $fencedPattern, '')
-$legacyLine = ". `"$starcommandPath`""
-$cleaned = ($cleaned -split "`r?`n" | Where-Object { $_.Trim() -ne $legacyLine.Trim() }) -join "`r`n"
+$cleaned = ($cleaned -split "`r?`n" | Where-Object {
+    $_ -notmatch '^\s*\.\s+.*starcommand\.ps1"?\s*$'
+}) -join "`r`n"
 $cleaned = $cleaned.TrimEnd()
 
 $separator = if ($cleaned) { "`r`n`r`n" } else { '' }
-Set-Content -Path $profilePath -Value ($cleaned + $separator + $profileBlock + "`r`n")
+Set-Content -Path $profilePath -Value ($cleaned + $separator + $profileBlock + "`r`n") -Encoding utf8
 
 # 6. Load it into the current session too, so the user doesn't have to restart
 . $starcommandPath

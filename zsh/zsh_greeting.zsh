@@ -44,7 +44,7 @@ _rkt_update_check_background() {
   fi
   local branch="main"
   _rkt_load_settings
-  ( curl -fsSL --max-time 3 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" 2>/dev/null \
+  ( curl -fsSL --max-time 3 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/docs/VERSION" 2>/dev/null \
       | { IFS= read -r v; printf '%s\n%s\n' "$now" "${v:-}"; } \
       > "$_RKT_UPDATE_CACHE" ) 2>/dev/null &
   disown
@@ -58,7 +58,7 @@ _rkt_update_check_nudge() {
   [[ -n $cached_version ]] || return
   [[ "$cached_version" != "$_RKT_VERSION" ]] || return
   _rkt_set_color grey
-  echo "(starcommand v$cached_version available — run 'star update' — https://github.com/${_rkt_repo_slug}/blob/main/CHANGELOG.md)"
+  echo "(starcommand v$cached_version available — run 'star update' — https://github.com/${_rkt_repo_slug}/blob/main/docs/CHANGELOG.md)"
   _rkt_set_color normal
 }
 
@@ -931,7 +931,7 @@ star() {
       _rkt_load_settings
       local branch="main"
       [[ "$_rkt_channel" == "cantaloupe" ]] && branch="cantaloupe"
-      local remote_version=$(curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" 2>/dev/null)
+      local remote_version=$(curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/docs/VERSION" 2>/dev/null)
       if [[ -z $remote_version ]]; then
         echo "Failed to check for updates. Visit https://github.com/${_rkt_repo_slug}/releases"
         return 1
@@ -969,7 +969,7 @@ star() {
         return 1
       fi
       local script_dir="${script_path:h}"
-      local version_url="https://raw.githubusercontent.com/clefspear/starcommand/${branch}/docs/VERSION"
+      local version_url="https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/docs/VERSION"
       local temp_version
       temp_version=$(mktemp 2>/dev/null) || temp_version="/tmp/starcommand_version.$$"
       local version_http
@@ -981,7 +981,7 @@ star() {
       fi
       cp "$script_path" "${script_path}.bak"
       mv "$temp_file" "$script_path"
-      curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" -o "$script_dir/VERSION" 2>/dev/null || true
+      curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/docs/VERSION" -o "$script_dir/VERSION" 2>/dev/null || true
       echo "Updated to v$remote_version. Open a new tab to take effect."
       rm -f "$_RKT_UPDATE_CACHE"
       ;;
@@ -1108,6 +1108,7 @@ star() {
       [[ -f "$profile" ]] && eval sed "$sed_opt" '/zsh_greeting\.zsh/d; /# >>> starcommand >>>/,/# <<< starcommand <<</d' "$profile"
       local script_path="${(%):-%x}"
       [[ -n "$script_path" && -f "$script_path" ]] && rm -f "$script_path"
+      [[ -n "$script_path" ]] && rm -f "${script_path:h}/VERSION"
       rm -f "$_RKT_UPDATE_CACHE"
       if $keep; then
         echo "starcommand uninstalled. Favorites, history, and settings kept at ~/.config/zsh/"
@@ -1543,9 +1544,9 @@ _starcommand_install() {
     ' "$profile" > "${profile}.tmp" && mv "${profile}.tmp" "$profile"
   fi
 
-  # Strip any legacy bare references to starcommand
-  if grep -Fq "starcommand" "$profile"; then
-    grep -v 'starcommand' "$profile" > "${profile}.tmp" && mv "${profile}.tmp" "$profile"
+  # Strip legacy bare dot-source lines pointing to zsh_greeting.zsh (any location)
+  if grep -Fq "zsh_greeting.zsh" "$profile"; then
+    grep -v 'zsh_greeting\.zsh' "$profile" > "${profile}.tmp" && mv "${profile}.tmp" "$profile"
   fi
 
   # Append the fresh block

@@ -4,7 +4,8 @@
 # starcommand.sh — Portable rocket greeting for Bash
 # Implements xorshift32 PRNG for cross-shell deterministic output
 
-_RKT_VERSION="$(cat "$(dirname "${BASH_SOURCE[0]}")/VERSION" 2>/dev/null || echo "0.0.0")"
+_RKT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_RKT_VERSION="$(cat "${_RKT_SCRIPT_DIR}/VERSION" 2>/dev/null || echo "0.0.0")"
 _RKT_UPDATE_CACHE="$HOME/.config/bash/rocket_update_check"
 
 _rkt_is_newer_version() {
@@ -45,7 +46,7 @@ _rkt_update_check_background() {
     local branch="main"
     _rkt_load_settings
     [[ "$_rkt_channel" == "cantaloupe" ]] && branch="cantaloupe"
-    ( curl -fsSL --max-time 3 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" 2>/dev/null \
+    ( curl -fsSL --max-time 3 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/docs/VERSION" 2>/dev/null \
         | { IFS= read -r v; printf '%s\n%s\n' "$now" "${v:-}"; } \
         > "$_RKT_UPDATE_CACHE" ) 2>/dev/null &
     disown
@@ -59,7 +60,7 @@ _rkt_update_check_nudge() {
     [[ -n $cached_version ]] || return
     [[ "$cached_version" != "$_RKT_VERSION" ]] || return
     rkt_set_color grey
-    echo "(starcommand v$cached_version available — run 'star update' — https://github.com/${_rkt_repo_slug}/blob/main/CHANGELOG.md)"
+    echo "(starcommand v$cached_version available — run 'star update' — https://github.com/${_rkt_repo_slug}/blob/main/docs/CHANGELOG.md)"
     rkt_set_color normal
 }
 
@@ -1030,7 +1031,7 @@ star() {
                     ;;
                 random)
                     if [[ "$val" != white && "$val" != gold && "$val" != neon ]]; then
-                        echo "Random mode must be 'white' or 'neon'."
+                        echo "Random mode must be 'white', 'gold', or 'neon'."
                         return 1
                     fi
                     _rkt_random_star_mode="$val"
@@ -1043,7 +1044,7 @@ star() {
                     ;;
                 favorite|favorites|fav)
                     if [[ "$val" != white && "$val" != gold && "$val" != neon ]]; then
-                        echo "Favorite mode must be 'gold' or 'neon'."
+                        echo "Favorite mode must be 'white', 'gold', or 'neon'."
                         return 1
                     fi
                     _rkt_favorite_star_mode="$val"
@@ -1083,7 +1084,7 @@ star() {
             _rkt_load_settings
             local branch="main"
             [[ "$_rkt_channel" == "cantaloupe" ]] && branch="cantaloupe"
-            local remote_version=$(curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" 2>/dev/null)
+            local remote_version=$(curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/docs/VERSION" 2>/dev/null)
             if [[ -z $remote_version ]]; then
                 echo "Failed to check for updates. Visit https://github.com/${_rkt_repo_slug}/releases"
                 return 1
@@ -1121,7 +1122,7 @@ star() {
                 return 1
             fi
             local script_dir="$(dirname "$script_path")"
-            local version_url="https://raw.githubusercontent.com/clefspear/starcommand/${branch}/docs/VERSION"
+            local version_url="https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/docs/VERSION"
             local temp_version
             temp_version=$(mktemp 2>/dev/null) || temp_version="/tmp/starcommand_version.$$"
             local version_http
@@ -1133,7 +1134,7 @@ star() {
             fi
             cp "$script_path" "${script_path}.bak"
             mv "$temp_file" "$script_path"
-            curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/VERSION" -o "$script_dir/VERSION" 2>/dev/null || true
+            curl -fsSL --max-time 5 "https://raw.githubusercontent.com/${_rkt_repo_slug}/${branch}/docs/VERSION" -o "$script_dir/VERSION" 2>/dev/null || true
             echo "Updated to v$remote_version. Open a new tab to take effect."
             rm -f "$_RKT_UPDATE_CACHE"
             ;;
@@ -1213,10 +1214,10 @@ echo "star explore [N]              browse N random palettes (default 5)"
             _rkt_print_option "$_rkt_terminal_theme" dark light
             echo
             echo -n "star color random <mode>      random-palette stars: "
-            _rkt_print_option "$_rkt_random_star_mode" white neon
+            _rkt_print_option "$_rkt_random_star_mode" white gold neon
             echo
             echo -n "star color favorite <mode>    favorite-palette stars: "
-            _rkt_print_option "$_rkt_favorite_star_mode" gold neon
+            _rkt_print_option "$_rkt_favorite_star_mode" white gold neon
             echo
             echo -n "star weight <0-100>           ratio of favorites to random rockets. Currently: "
             rkt_set_color --bold --italics
@@ -1265,7 +1266,14 @@ echo "star explore [N]              browse N random palettes (default 5)"
             if $keep; then
                 echo "starcommand uninstalled. Favorites, history, and settings kept at ~/.config/bash/"
             else
-                rm -f "$HOME/.config/bash/rocket_favorites.txt" "$HOME/.config/bash/rocket_history.txt" "$HOME/.config/bash/rocket_settings.sh"
+                rm -f \
+                  "$HOME/.config/bash/rocket_favorites.txt" \
+                  "$HOME/.config/bash/rocket_history.txt" \
+                  "$HOME/.config/bash/rocket_settings.sh" \
+                  "$HOME/.config/bash/rocket_update_check" \
+                  "$HOME/.config/bash/rocket_hw_cache.sh" \
+                  "$HOME/.config/bash/rocket_net_cache.sh" \
+                  "$HOME/.config/bash/VERSION"
                 echo "starcommand has been uninstalled."
             fi
             return 0
@@ -1608,9 +1616,6 @@ rkt_starcommand() {
 # If run directly, execute once
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
     rkt_starcommand "$@"
-fi
-
-# Auto-run in interactive shells
-if [[ $- == *i* ]] && [[ -t 1 ]]; then
+elif [[ $- == *i* ]] && [[ -t 1 ]]; then
     rkt_starcommand
 fi

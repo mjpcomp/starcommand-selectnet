@@ -1,20 +1,16 @@
-﻿# Created By: Peter Azmy
+# Created By: Peter Azmy
 # Forked By: MJPComp
 # starcommand.ps1 — Portable rocket greeting for PowerShell
 # Implements xorshift32 PRNG for cross-shell deterministic output
 # Works in PowerShell 5.1+ and PowerShell 7+
 
-$script:RktVersion = if (Test-Path (Join-Path $PSScriptRoot 'VERSION')) { (Get-Content (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim() } else { '0.0.0' }
-$script:RktUpdateCache = Join-Path (Get-RocketConfigDir) 'rocket_update_check'
-$script:RktRepoSlug = 'mjpcomp/starcommand-selectnet'
-$script:RktVersion = if (Test-Path (Join-Path $PSScriptRoot 'VERSION')) { (Get-Content (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim() } else { '0.0.0' }
-$script:RktRepoSlug = 'mjpcomp/starcommand-selectnet'
-
 function Get-RocketConfigDir {
-    # Use profile-relative path for consistency with installer
-    $profileBase = Split-Path -Parent $PROFILE.CurrentUserAllHosts
-    return (Join-Path $profileBase '.starcommand')
+    return (Split-Path -Parent $PROFILE.CurrentUserAllHosts)
 }
+
+$script:RktVersion = if (Test-Path (Join-Path $PSScriptRoot 'VERSION')) { (Get-Content (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim() } else { '0.0.0' }
+$script:RktRepoSlug = 'mjpcomp/starcommand-selectnet'
+$script:RktUpdateCache = Join-Path (Get-RocketConfigDir) 'rocket_update_check'
 
 function Invoke-UpdateCheckBackground {
     if ($env:STARCOMMAND_NO_UPDATE_CHECK) { return }
@@ -66,7 +62,7 @@ function Invoke-UpdateCheckNudge {
     if ($cachedVersion -eq $script:RktVersion) { return }
 
     Set-RocketColor grey
-    [Console]::WriteLine("(starcommand v$cachedVersion available — run 'star update' — https://github.com/$($script:RktRepoSlug)/blob/main/CHANGELOG.md)")
+    [Console]::WriteLine("(starcommand v$cachedVersion available — run 'star update' — https://github.com/$($script:RktRepoSlug)/blob/main/docs/CHANGELOG.md)")
     Set-RocketColor normal
 }
 
@@ -1275,7 +1271,7 @@ function star {
 
                     $global:_rkt_net_interface = $name
                     Invoke-SaveSettings
-                    Remove-Item (Join-Path $HOME '.config/powershell/rocket_net_cache.ps1') -ErrorAction SilentlyContinue
+                    Remove-Item (Join-Path (Get-RocketConfigDir) 'rocket_net_cache.ps1') -ErrorAction SilentlyContinue
                     [Console]::WriteLine("Network adapter set to: $name")
                     return
                 }
@@ -1283,7 +1279,7 @@ function star {
                 'auto' {
                     $global:_rkt_net_interface = ''
                     Invoke-SaveSettings
-                    Remove-Item (Join-Path $HOME '.config/powershell/rocket_net_cache.ps1') -ErrorAction SilentlyContinue
+                    Remove-Item (Join-Path (Get-RocketConfigDir) 'rocket_net_cache.ps1') -ErrorAction SilentlyContinue
                     [Console]::WriteLine('Network adapter selection reset to automatic.')
                     return
                 }
@@ -1367,7 +1363,11 @@ function star {
                 Set-Content -Path $profilePath -Value $cleaned.TrimEnd()
             }
             $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Source }
-            if ($scriptPath -and (Test-Path $scriptPath)) { Remove-Item $scriptPath -Force }
+            if ($scriptPath -and (Test-Path $scriptPath)) {
+                $scriptDir = Split-Path $scriptPath -Parent
+                Remove-Item $scriptPath -Force
+                Remove-Item (Join-Path $scriptDir 'VERSION') -Force -ErrorAction SilentlyContinue
+            }
             Remove-Item $script:RktUpdateCache -Force -ErrorAction SilentlyContinue
 
 			$configDir = Get-RocketConfigDir
@@ -1408,6 +1408,7 @@ function Write-WelcomeMessage {
         [Console]::Write('Captain ')
         Set-RocketColor 'FFF'
         [Console]::Write((whoami))
+        [Console]::Write('!')
     }
     Set-RocketColor normal
 }

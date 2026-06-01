@@ -36,7 +36,7 @@ function _rkt_update_check_background --description "Background weekly version c
     _rkt_load_settings
     test "$_rkt_channel" = "cantaloupe"; and set branch "cantaloupe"
     begin
-        set --local v (curl -fsSL --max-time 3 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/VERSION" 2>/dev/null)
+        set --local v (curl -fsSL --max-time 3 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/docs/VERSION" 2>/dev/null)
         printf '%s\n%s\n' "$now" "$v" > $_RKT_UPDATE_CACHE
     end &
 end
@@ -48,7 +48,7 @@ function _rkt_update_check_nudge --description "Print update nudge if newer vers
     test -n "$cached_version"; or return
     test "$cached_version" != "$_RKT_VERSION"; or return
     set_color grey
-    echo "(starcommand v$cached_version available — run 'star update' — https://github.com/$_rkt_repo_slug/blob/main/CHANGELOG.md)"
+    echo "(starcommand v$cached_version available — run 'star update' — https://github.com/$_rkt_repo_slug/blob/main/docs/CHANGELOG.md)"
     set_color normal
 end
 
@@ -924,7 +924,7 @@ function star --description "Save / browse / preview rocket palettes"
             _rkt_load_settings
             set --local branch "main"
             test "$_rkt_channel" = "cantaloupe"; and set branch "cantaloupe"
-            set --local remote_version (curl -fsSL --max-time 5 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/VERSION" 2>/dev/null)
+            set --local remote_version (curl -fsSL --max-time 5 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/docs/VERSION" 2>/dev/null)
             if test -z "$remote_version"
                 echo "Failed to check for updates. Visit https://github.com/$_rkt_repo_slug/releases"
                 return 1
@@ -960,7 +960,7 @@ function star --description "Save / browse / preview rocket palettes"
                 return 1
             end
             set --local script_dir (dirname "$script_path")
-            set --local version_url "https://raw.githubusercontent.com/clefspear/starcommand/$branch/docs/VERSION"
+            set --local version_url "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/docs/VERSION"
             set --local temp_version (mktemp 2>/dev/null; or echo /tmp/starcommand_version.$fish_pid)
             set --local version_http (curl -sS -L --max-time 10 -w "%{http_code}" -o "$temp_version" "$version_url" 2>/dev/null)
             if test "$version_http" != "200"
@@ -970,7 +970,7 @@ function star --description "Save / browse / preview rocket palettes"
             end
             cp "$script_path" "$script_path.bak"
             mv "$temp_file" "$script_path"
-            curl -fsSL --max-time 5 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/VERSION" -o "$script_dir/VERSION" 2>/dev/null; or true
+            curl -fsSL --max-time 5 "https://raw.githubusercontent.com/$_rkt_repo_slug/$branch/docs/VERSION" -o "$script_dir/VERSION" 2>/dev/null; or true
             echo "Updated to v$remote_version. Open a new tab to take effect."
             rm -f $_RKT_UPDATE_CACHE
 

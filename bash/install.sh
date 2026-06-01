@@ -89,9 +89,9 @@ update_profile() {
         ' "$profile" > "${profile}.tmp" && mv "${profile}.tmp" "$profile"
     fi
 
-    # Strip any legacy bare source lines that reference starcommand
-    if grep -Fq "starcommand" "$profile"; then
-        grep -v 'starcommand' "$profile" > "${profile}.tmp" && mv "${profile}.tmp" "$profile"
+    # Strip any legacy bare source line that exactly matches the current source line
+    if grep -Fqx "$SOURCE_LINE" "$profile"; then
+        grep -Fvx "$SOURCE_LINE" "$profile" > "${profile}.tmp" && mv "${profile}.tmp" "$profile"
     fi
 
     # Append the fresh block

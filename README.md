@@ -40,7 +40,7 @@ Behavior:
 When a preferred interface is set, the greeting will query that interface for IP/gateway display first, then fall back to automatic detection if the interface is unavailable or returns no data.
 
 Settings are persisted per shell:
-- PowerShell: `~/.config/powershell/rocket_settings.ps1`
+- PowerShell: `<profile_dir>/rocket_settings.ps1`
 - bash: `~/.config/bash/rocket_settings.sh`
 - zsh: `~/.config/zsh/rocket_settings.zsh`
 - fish: `~/.config/fish/rocket_settings.fish`
@@ -108,8 +108,8 @@ But the kicker: it's all reproducible. Save a palette to favorites and you've sa
 |---------------------------------|-------------------------------------------------|
 |`star color`                     |Show current palette + rocket preview            |
 |`star color theme <dark\|light>`  |Match your terminal background; rocket is white by default, black on light terminals|
-|`star color random <white\|neon>` |Star color on random rockets                     |
-|`star color favorite <gold\|neon>`|Star color on favorite rockets                   |
+|`star color random <white\|gold\|neon>`|Star color on random rockets                     |
+|`star color favorite <white\|gold\|neon>`|Star color on favorite rockets                   |
 |`star color reset`               |Restore defaults                                 |
 |`star weight <0-100>`            |Ratio of favorites to random rockets (default 20)|
 
@@ -129,7 +129,7 @@ starcommand uses a portable xorshift32 PRNG, implemented identically in bash, zs
 
 That matters because the palette is the spec. Save a palette to favorites in bash, sync `rocket_favorites.txt` to another machine running PowerShell, and that same six-hex-code line produces the same 18 stars in the same 18 positions with the same flame. Favorites are portable across every supported shell.
 
-Verified by `tests/parity_test.sh`, which runs all four shells against a fixed reference fixture and confirms zero bytes of difference.
+Verified in the source repository by `tests/parity_test.sh`, which runs all four shells against a fixed reference fixture and confirms zero bytes of difference.
 
 <!-- ![parity](docs/parity.png) -->
 
@@ -207,7 +207,7 @@ Return to automatic selection:
 star net auto
 ```
 
-This preference is saved in `~/.config/powershell/rocket_settings.ps1`.
+This preference is saved in `<profile_dir>/rocket_settings.ps1`.
 
 ## Updating
 
@@ -229,17 +229,19 @@ The check only runs if you opt in. To override at any time, set `STARCOMMAND_NO_
 
 ## Color modes
 
-**Gold (default for favorites)** — when a saved favorite rolls up, the star field renders in bright Mario-star yellow.
+These modes affect the **star field only**. The rocket body, windows, tip, sides, and flame still use the six-color palette.
+
+**Gold** — every star renders in a fixed gold/yellow color. Default for favorites.
 
 <!-- ![gold](docs/gold.png) -->
 
-**White** — every star renders in plain terminal white. Clean, minimal, no frills.
+**White** — every star renders in a fixed neutral color: white on dark terminals, dark gray on light terminals for readability.
 
-**Neon** — every star independently rolls from a 28-color palette spanning the full hue wheel at 15° increments. Maximum chromatic chaos.
+**Neon** — every star independently rolls from a 28-color palette. On light terminals, a darker companion palette is used for readability.
 
 <!-- ![neon](docs/neon.png) -->
 
-Use neon on favorites to make them pop, or on random rolls to make every shell feel like a party.
+Both `star color random` and `star color favorite` accept `white`, `gold`, and `neon`.
 
 -----
 
@@ -254,7 +256,7 @@ A xorshift32 PRNG, implemented identically across all four shells, generates the
 **Seed sourcing:**
 Every shell launch reads a fresh 32-bit unsigned integer from `/dev/urandom` on bash, zsh, and fish, and from `Get-Random` on PowerShell. Zero is rejected (xorshift32 sticks at zero) and re-rolled. This means every tab is a new rocket, but if you explicitly pass the same seed to any of the four implementations, you get byte-identical output — which is what makes favorites portable across shells.
 
-Verified by `tests/parity_test.sh` and `tests/prng_reference.txt` — every shell reproduces the reference fixture exactly when given the same seed, and the end-to-end test confirms byte-identical output across bash, zsh, PowerShell, and fish.
+Verified in the source repository by `tests/parity_test.sh` and `tests/prng_reference.txt` — every shell reproduces the reference fixture exactly when given the same seed, and the end-to-end test confirms byte-identical output across bash, zsh, PowerShell, and fish.
 
 -----
 

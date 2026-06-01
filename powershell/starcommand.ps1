@@ -1126,9 +1126,11 @@ function star {
                 [Console]::WriteLine('curl or Invoke-WebRequest is required for star update.')
                 return
             }
+
             Invoke-LoadSettings
             $branch = 'main'
             if ($global:_rkt_channel -eq 'cantaloupe') { $branch = 'cantaloupe' }
+
             $remoteVersion = ''
             $versionUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/docs/VERSION"
             if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
@@ -1136,10 +1138,12 @@ function star {
             } else {
                 try { $remoteVersion = (Invoke-WebRequest -Uri $versionUrl -TimeoutSec 5 -UseBasicParsing).Content.Trim() } catch {}
             }
+
             if (-not $remoteVersion) {
                 [Console]::WriteLine("Failed to check for updates. Visit https://github.com/$($script:RktRepoSlug)/releases")
                 return
             }
+
             try {
                 $remoteVer = [System.Version]::Parse($remoteVersion)
                 $localVer = [System.Version]::Parse($script:RktVersion)
@@ -1147,6 +1151,7 @@ function star {
             } catch {
                 $isNewer = $remoteVersion -ne $script:RktVersion
             }
+
             if (-not $isNewer) {
                 if ($remoteVersion -eq $script:RktVersion) {
                     [Console]::WriteLine("starcommand is already up to date (v$script:RktVersion).")
@@ -1155,23 +1160,27 @@ function star {
                 }
                 return
             }
+
             [Console]::WriteLine("starcommand v$remoteVersion is available. Update now? [y/n]")
             $response = [Console]::ReadLine()
             if ($response -ne 'y' -and $response -ne 'Y') {
                 [Console]::WriteLine('Update cancelled.')
                 return
             }
+
             $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Source }
             if (-not $scriptPath -or -not (Test-Path $scriptPath)) {
                 [Console]::WriteLine('Cannot determine script path. Update manually.')
                 return
             }
+
             $tempFile = [System.IO.Path]::GetTempFileName()
+            $tempVersion = [System.IO.Path]::GetTempFileName()
+            $versionOk = $false
+            $httpCode = ''
             $dlUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/powershell/starcommand.ps1"
             [Console]::WriteLine("Downloading: $dlUrl")
-			$tempVersion = [System.IO.Path]::GetTempFileName()
-			$versionOk = $false
-            $httpCode = ""
+
             try {
                 if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
                     $result = & curl.exe -sS -L --ssl-no-revoke --max-time 10 -w '%{http_code}' -o $tempFile $dlUrl 2>$null
@@ -1182,16 +1191,24 @@ function star {
                     $httpCode = $response.StatusCode
                     $curlExit = 0
                 }
+
                 [Console]::WriteLine("HTTP $httpCode, curl exit $curlExit")
-                if ($httpCode -ne "200" -and $httpCode -ne 200) {
+
+                if ($httpCode -ne '200' -and $httpCode -ne 200) {
                     [Console]::WriteLine('Download failed. Update aborted.')
-                    Remove-Item $tempFile -ErrorAction SilentlyContinue
+                    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                    Remove-Item $tempVersion -Force -ErrorAction SilentlyContinue
                     return
                 }
+
+                if (-not (Test-Path $tempFile)) {
+                    [Console]::WriteLine('Failed to download updated script file. Update aborted.')
+                    Remove-Item $tempVersion -Force -ErrorAction SilentlyContinue
+                    return
+                }
+
                 $scriptDir = Split-Path $scriptPath -Parent
-                Copy-Item $scriptPath "$scriptPath.bak" -Force
-                Move-Item $tempFile $scriptPath -Force
-                $versionUrl = "https://raw.githubusercontent.com/$($script:RktRepoSlug)/$branch/docs/VERSION"
+
                 try {
                     if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
                         $vh = & curl.exe -sS -L --ssl-no-revoke --max-time 10 -w '%{http_code}' -o $tempVersion $versionUrl 2>$null
@@ -1201,20 +1218,30 @@ function star {
                         if ($vr.StatusCode -eq 200) { $versionOk = $true }
                     }
                 } catch {}
+
                 if (-not $versionOk) {
                     [Console]::WriteLine('Failed to download VERSION file. Update aborted.')
                     Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
                     Remove-Item $tempVersion -Force -ErrorAction SilentlyContinue
                     return
                 }
+
                 Copy-Item $scriptPath "$scriptPath.bak" -Force
-                Move-Item $tempFile $scriptPath -Force
-                Move-Item $tempVersion (Join-Path $scriptDir 'VERSION') -Force
-                [Console]::WriteLine("Updated to v$remoteVersion. Open a new tab to take effect.")
+
+                try {
+                    Move-Item $tempFile $scriptPath -Force
+                    Move-Item $tempVersion (Join-Path $scriptDir 'VERSION') -Force
+                } catch {
+                    [Console]::WriteLine("Update failed while replacing files: $($_.Exception.Message)")
+                    return
+                }
+
                 Remove-Item $script:RktUpdateCache -Force -ErrorAction SilentlyContinue
+                [Console]::WriteLine("Updated to v$remoteVersion. Open a new tab to take effect.")
             } catch {
                 [Console]::WriteLine('Download failed. Update aborted.')
-                Remove-Item $tempFile -ErrorAction SilentlyContinue
+                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                Remove-Item $tempVersion -Force -ErrorAction SilentlyContinue
             }
         }
 

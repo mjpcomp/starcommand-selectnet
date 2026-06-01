@@ -54,6 +54,7 @@ $endMarker   = '# <<< starcommand <<<'
 $profileBlock = @"
 $beginMarker
 . "$starcommandPath"
+Invoke-Starcommand
 $endMarker
 "@
 
